@@ -1,0 +1,199 @@
+predefined_talks = {
+    "who are you": "My name is MEI, your favorite AI.",
+    "should i marry mandeep": "Yeah yeah, you should definitely meet him in Australia someday.",
+    "your name": "My name is MEI, your favorite AI.",
+    "what time is it": "Let me check the time for you.",
+    "good morning": "Good morning! Hope your day starts with a smile.",
+    "bye": "Goodbye! Talk to you later.",
+    "who is mandeep": "Mandip is someone who treats his girl badly, or so it seems from social media.",
+    "who is mandir": "Mandip is the definition of someone who treats his girl badly that she would cry in insta Notes someday.",
+    "who is mandip": "Mandip is Sudip's best friend, honestly speaking... he's gay though.",
+    "m a n d i p": "Sorry about earlier. Mandip is Sudip's best friend, honestly speaking... he's gay though."
+}
+
+
+
+from flask import Flask, request, jsonify, render_template
+import subprocess
+import pyttsx3
+import threading
+
+app = Flask(__name__)
+
+predefined_responses = {
+    "hello": "Hello! How can I assist you today?",
+    "your name": "My name is MEI, your favorite AI.",
+    "mandip": "Mandip is someone who treats his girl badly, or so it seems from social media."
+}
+
+def speak_text(text):
+    try:
+        local_engine = pyttsx3.init()
+        voices = local_engine.getProperty('voices')
+
+        # Choose a female or alternative voice if available
+        for voice in voices:
+            if "female" in voice.name.lower() or "zira" in voice.name.lower():
+                local_engine.setProperty('voice', voice.id)
+                break
+
+        local_engine.setProperty('rate', 180)
+        print(f"[Speaking]: {text}")
+        local_engine.say(text)
+        local_engine.runAndWait()
+        local_engine.stop()
+    except Exception as e:
+        print("[!] TTS error:", e)
+
+def generate_response(text):
+    text = text.lower()
+    for keyword, reply in predefined_responses.items():
+        if keyword in text:
+            print(f"[Custom keyword triggered]: {reply}")
+            return reply
+
+    try:
+        result = subprocess.run(
+            ["ollama", "run", "deepseek-coder-v2:16b"],
+            input=text,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            timeout=40,
+            encoding='utf-8',
+            errors='ignore'
+        )
+        response = result.stdout.strip().split("\n")[-1]
+        print("[DeepSeek]:", response)
+        return response or "I'm not sure how to respond to that."
+    except subprocess.TimeoutExpired:
+        print("[!] DeepSeek error: Command timed out after 40 seconds")
+        return "Sorry, DeepSeek took too long to respond."
+
+@app.route("/")
+def index():
+    return render_template("index.html")
+
+@app.route("/speak", methods=["POST"])
+def speak():
+    data = request.json
+    text = data.get("text", "")
+    print("[+] Heard:", text)
+
+    reply = generate_response(text)
+
+    thread = threading.Thread(target=speak_text, args=(reply,))
+    thread.start()
+
+    return jsonify({"reply": reply})
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>DeepSeek Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: sans-serif;
+        background: #000;
+        color: white;
+        text-align: center;
+        margin: 0;
+        padding: 2rem;
+      }
+
+      .contain {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        height: 100vh;
+      }
+
+      h1 {
+        font-size: 2em;
+        margin-bottom: 1rem;
+      }
+
+      #status,
+      #response {
+        font-size: 1.2em;
+        margin-top: 1rem;
+        padding: 0.5rem;
+        background: #222;
+        border-radius: 10px;
+        max-width: 90%;
+        margin-left: auto;
+        margin-right: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="contain">
+      <h1>🎤 Always Listening: DeepSeek</h1>
+      <div id="status">🎧 Listening...</div>
+      <div id="response"></div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const responseEl = document.getElementById("response");
+
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+
+        recognition.onresult = (event) => {
+          const transcript =
+            event.results[event.resultIndex][0].transcript.trim();
+          statusEl.textContent = "🧠 Heard: " + transcript;
+
+          fetch("/speak", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: transcript }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.reply) {
+                responseEl.textContent = "🤖 " + data.reply;
+              }
+            });
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          statusEl.textContent = "⚠️ Error: " + event.error;
+        };
+
+        recognition.onend = () => {
+          recognition.start();
+        };
+
+        recognition.start();
+      } else {
+        statusEl.textContent = "Speech Recognition not supported 😢";
+      }
+    </script>
+  </body>
+</html>

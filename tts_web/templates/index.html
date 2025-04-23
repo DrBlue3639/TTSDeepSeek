@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>DeepSeek Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: sans-serif;
+        background: #000;
+        color: white;
+        text-align: center;
+        margin: 0;
+        padding: 2rem;
+      }
+
+      .contain {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        height: 100vh;
+      }
+
+      h1 {
+        font-size: 2em;
+        margin-bottom: 1rem;
+      }
+
+      #status,
+      #response {
+        font-size: 1.2em;
+        margin-top: 1rem;
+        padding: 0.5rem;
+        background: #222;
+        border-radius: 10px;
+        max-width: 90%;
+        margin-left: auto;
+        margin-right: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="contain">
+      <h1>🎤 Always Listening: DeepSeek</h1>
+      <div id="status">🎧 Listening...</div>
+      <div id="response"></div>
+    </div>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const responseEl = document.getElementById("response");
+
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+
+        recognition.onresult = (event) => {
+          const transcript =
+            event.results[event.resultIndex][0].transcript.trim();
+          statusEl.textContent = "🧠 Heard: " + transcript;
+
+          fetch("/speak", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: transcript }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.reply) {
+                responseEl.textContent = "🤖 " + data.reply;
+              }
+            });
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+          statusEl.textContent = "⚠️ Error: " + event.error;
+        };
+
+        recognition.onend = () => {
+          recognition.start();
+        };
+
+        recognition.start();
+      } else {
+        statusEl.textContent = "Speech Recognition not supported 😢";
+      }
+    </script>
+  </body>
+</html>
