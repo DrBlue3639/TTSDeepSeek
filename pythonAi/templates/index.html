@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>DeepSeek Continuous</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        padding: 2rem;
+      }
+      #status {
+        font-size: 18px;
+        margin-top: 1rem;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>🎤 Always Listening: DeepSeek</h1>
+    <p id="status">🎧 Listening...</p>
+    <p id="response"></p>
+
+    <script>
+      const statusEl = document.getElementById("status");
+      const responseEl = document.getElementById("response");
+
+      const SpeechRecognition =
+        window.SpeechRecognition || window.webkitSpeechRecognition;
+
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+
+        recognition.onresult = (event) => {
+          const transcript =
+            event.results[event.resultIndex][0].transcript.trim();
+          statusEl.textContent = "🧠 Heard: " + transcript;
+
+          fetch("/speak", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: transcript }),
+          })
+            .then((res) => res.json())
+            .then((data) => {
+              if (data.reply) {
+                responseEl.textContent = "🤖 " + data.reply;
+              }
+            });
+        };
+
+        recognition.onerror = (event) => {
+          console.error("Speech recognition error:", event.error);
+        };
+
+        recognition.onend = () => {
+          recognition.start(); // Restart on end to keep listening
+        };
+
+        recognition.start();
+      } else {
+        statusEl.textContent = "Speech Recognition not supported 😢";
+      }
+    </script>
+  </body>
+</html>
